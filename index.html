@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MTR+B系統</title>
+
+<style>
+body{margin:0;background:#000;color:#fff;font-family:Arial;}
+.wrap{padding:10px;}
+
+.row{display:flex;gap:5px;margin-bottom:5px;}
+button{flex:1;padding:10px;border:none;border-radius:6px;font-size:14px;}
+
+.card{background:#222;color:#fff;}
+.ctrl{background:#555;color:#fff;}
+.player{background:#0066ff;}
+.banker{background:#cc0000;}
+.tie{background:#999;}
+
+.panel{margin-top:10px;font-size:14px;}
+.history{margin-top:10px;font-size:12px;}
+.good{color:#00ff66;}
+.bad{color:#ff4444;}
+.tiec{color:#ffaa00;}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<h3>M / T / R / B 系統</h3>
+
+<div class="row" id="cards"></div>
+
+<div class="row">
+<button class="ctrl" onclick="skip()">跳過</button>
+<button class="ctrl" onclick="resetRound()">清除</button>
+</div>
+
+<div class="row">
+<button class="player" onclick="setResult('閒')">閒</button>
+<button class="banker" onclick="setResult('莊')">莊</button>
+<button class="tie" onclick="setResult('和')">和</button>
+</div>
+
+<div class="panel" id="analysis"></div>
+<div class="panel" id="stats"></div>
+<div class="history" id="history"></div>
+
+</div>
+
+<script>
+
+// ===== 基本 =====
+const keys=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+let round=[];
+let history=[];
+
+let lastResult="";
+let B_lastAdvice="觀望";
+
+let B_total=0,B_hit=0;
+
+// ===== UI =====
+function renderKeys(){
+let html="";
+keys.forEach(k=>{
+html+=`<button class="card" onclick="add('${k}')">${k}</button>`;
+});
+document.getElementById("cards").innerHTML=html;
+}
+
+function add(c){
+if(round.length<6){
+round.push(c);
+update();
+}
+}
+
+function skip(){
+if(round.length<6){
+round.push("-");
+update();
+}
+}
+
+function resetRound(){
+round=[];
+update();
+}
+
+// ===== 工具 =====
+function isBig(c){return ["6","7","8","9"].includes(c);}
+function countBig(arr){return arr.filter(c=>isBig(c)).length;}
+
+// ===== B模組 =====
+function B_logic(result){
+
+let real=round.filter(c=>c!="-");
+let count=real.length;
+
+let p=[round[0],round[1]];
+let b=[round[2],round[3]];
+
+let pBig=countBig(p);
+let bBig=countBig(b);
+let totalBig=pBig+bBig;
+
+let suggestion="觀望";
+let reason="";
+
+if(count==4){
+
+if(totalBig==0){
+suggestion=result;
+reason="4張全小牌 → 續打";
+}
+else if(pBig>bBig){
+suggestion="閒";
+reason="閒大牌多";
+}
+else if(bBig>pBig){
+suggestion="莊";
+reason="莊大牌多";
+}
+else{
+suggestion=(result=="閒"?"莊":"閒");
+reason="大牌相同 → 對邊";
+}
+
+}
+
+if(count>=5){
+
+let last=real[real.length-1];
+
+if(isBig(last)){
+suggestion=(result=="閒"?"莊":"閒");
+reason="補大牌 → 反邊";
+}
+else{
+
+if(totalBig>0){
+
+if(pBig>bBig){
+suggestion="閒";
+reason="補小牌 → 閒大牌多";
+}
+else if(bBig>pBig){
+suggestion="莊";
+reason="補小牌 → 莊大牌多";
+}
+else{
+suggestion=(result=="閒"?"莊":"閒");
+reason="補小牌 → 對邊";
+}
+
+}
+else{
+suggestion=result;
+reason="補小牌且無大牌 → 續打";
+}
+
+}
+
+}
+
+return {suggestion,reason};
+}
+
+// ===== 主流程 =====
+function setResult(r){
+
+if(round.filter(c=>c!="-").length<4)return;
+
+// 先驗證 B
+let judge="和";
+
+if(B_lastAdvice!="觀望" && B_lastAdvice!=""){
+if(r=="和") judge="和";
+else if(B_lastAdvice==r) {judge="準"; B_hit++;}
+else judge="失敗";
+
+B_total++;
+}
+
+// 再算新建議
+let B=B_logic(r);
+
+// 記錄
+history.unshift(`
+${round.join(" ")}
+B:${B_lastAdvice} → 開:${r} → ${judge}
+下:${B.suggestion}
+`);
+
+history=history.slice(0,10);
+
+// 更新
+B_lastAdvice=B.suggestion;
+lastResult=r;
+
+update();
+resetRound();
+}
+
+// ===== UI =====
+function update(){
+
+let rate=B_total?((B_hit/B_total)*100).toFixed(1):0;
+
+document.getElementById("analysis").innerHTML=
+`B建議: ${B_lastAdvice}`;
+
+document.getElementById("stats").innerHTML=
+`B命中率: ${rate}% (${B_hit}/${B_total})`;
+
+document.getElementById("history").innerHTML=
+history.join("<br>");
+
+}
+
+renderKeys();
+update();
+
+</script>
+
+</body>
+</html>
